@@ -1,0 +1,9205 @@
+---
+title: "COVID-19 Vaccination Campagin Dashboard"
+author: "EPI-Data team"
+date: "last updated `r Sys.Date()`"
+output: 
+   flexdashboard::flex_dashboard:
+   orientation: rows
+   vertical_layout: fill
+   theme: 
+       bg: white
+
+---
+
+
+```{r global, echo=FALSE}
+
+pacman::p_load(
+  rio,
+  here, 
+  tidyverse, 
+  flextable,
+  DT, 
+  janitor,
+  flexdashboard, # dashboard versions of R Markdown reports
+  shiny,           # interactive figures
+  plotly, # interactive figures
+  egg, 
+  raster,
+  officer,
+  kableExtra,
+  data.table, 
+  htmltools)
+
+
+library(tmap)
+library(tmaptools)
+library(sf)
+library(rJava)
+library(OpenStreetMap)
+library(apyramid)
+
+
+
+
+
+
+
+
+
+
+# importing data
+
+Covid_19_Vaccination<-read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS-fXqHPqYN33pDWhFs3BytB8gEi_1qsy9y7ZNpwXCxF8MjNi3vNTSWUUHnauP8JugreOUqsRumr80A/pub?output=csv")
+
+
+
+# importing data
+
+targets<-read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRZL_HHh8RDwK7gO3fFfK-MSTm90gz2bezmv_yl2CsIQ81Hi1ZYY1qlLh8An6coxxA794DV9565w6Jw/pub?gid=1014427062&single=true&output=csv")
+
+
+
+# importing data
+
+National_target<-read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vT_2YdKUFZQ26VbYQtGQ2IZmjTCjU-CCG-0zVgw0e5YH9ZwVoOEcL1DxXtnKiujvg/pub?gid=478449976&single=true&output=csv")
+
+
+
+
+
+
+
+
+
+#booster_dose<-read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS-fXqHPqYN33pDWhFs3BytB8gEi_1qsy9y7ZNpwXCxF8MjNi3vNTSWUUHnauP8JugreOUqsRumr80A/pub?gid=1825376901&single=true&output=csv")
+
+
+
+# cleaning variables
+
+Covid_19_Vaccination<-clean_names(Covid_19_Vaccination)
+
+
+
+
+
+
+
+
+
+
+
+
+
+National_target<-clean_names(National_target)
+
+
+
+
+
+
+
+
+
+# replacing NA with Zero across column 4 to 31 
+
+Covid_19_Vaccination <- Covid_19_Vaccination %>%
+
+ mutate(across(4:31, ~ifelse(is.na(.), 0, .)))
+
+
+
+Covid_19_Vaccination<-Covid_19_Vaccination%>%
+
+  mutate(above_60_y_dose2female=as.numeric(above_60_y_dose2female))
+
+
+
+#skimr::skim_tee(Covid_19_Vaccination)
+
+
+
+
+
+#Covid_19_Vaccination$above_60_y_dose2female<-is.na(Covid_19_Vaccination$above_60_y_dose2female)
+
+
+
+#Covid_19_Vaccination<-Covid_19_Vaccination%>%
+
+  #drop_na()
+
+
+
+
+
+
+
+
+
+# replacing NA with Zero to specific columns
+
+ #Covid_19_Vaccination[4:31][is.na(Covid_19_Vaccination[4:31])]<-0 
+
+
+
+
+
+
+
+# cleaning variable names
+
+
+
+targets<-clean_names(targets)
+
+
+
+colnames(targets)[1]<-"zone"
+
+colnames(targets)[2]<-"district"
+
+colnames(targets)[3]<-"health_facility"
+
+colnames(targets)[4]<-"target"
+
+
+
+targets<-targets[-c(1:5),]# removing rows 1 to 5
+
+
+
+targets<-targets%>%
+
+  mutate(target=as.numeric(target))
+
+
+
+National_target<-National_target%>%
+
+  mutate(doses_available=as.numeric(total_doses_available_for_campaign))%>%
+
+  plotly::select(-total_doses_available_for_campaign)
+
+
+
+National_target[is.na(National_target)]<-0
+
+
+
+# changing value names of health facility to lower cases
+
+ Covid_19_Vaccination$health_facility     <-str_to_lower(Covid_19_Vaccination$health_facility)
+
+ 
+
+National_target$district<-str_to_lower(National_target$district)
+
+
+
+ targets$zone<-str_to_lower(targets$zone)
+
+ targets$district<-str_to_lower(targets$district)
+
+ targets$health_facility<-str_to_lower(targets$health_facility)
+
+ 
+
+ targets$target[is.na(targets$target)]<-0 # replacing NA with zero
+
+
+
+
+
+ # changing value names of districts to lower cases
+
+ Covid_19_Vaccination$district<-str_to_lower(Covid_19_Vaccination$district)
+
+
+
+
+
+# creating Varaibles 
+
+Covid_19_Vaccination<-Covid_19_Vaccination%>%
+
+  mutate(total_dose1_male=round(hw_dose_1male+social_w_dose1male+comorbids_dose1male+yeara_18_59_dose1male+above_60_y_dose1male+refugees_dose1male+prisoners_dose1male))%>%
+
+  mutate(total_dose1_female=round(hw_dose_1female+social_w_dose1female+comorbids_dose1female+years_18_59_dose1female+above_60_y_dose1female+refugees_dose1female+prisoners_dose1female))%>%
+
+  mutate(total_dose2_male=round(hw_dose2male+social_w_dose2male+comorbids_dose2male+years_18_59_dose2male+above_60_y_dose2male+refugees_dose2male+prisoners_dose2male))%>%
+
+  mutate(total_dose2_female=round(hw_dose2female+social_w_dose2female+comorbids_dose2female+years_18_59_dose2female+above_60_y_dose2female+refugees_dose2female+prisoners_dose2female))%>%
+
+  mutate(total_dose1=round(total_dose1_male+total_dose1_female))%>%
+
+  mutate(total_dose2=round(total_dose2_female+total_dose2_male))%>%
+
+  mutate(total_vacc=round(total_dose1+total_dose2))
+
+
+
+
+
+National_target2<-targets%>%
+
+  plotly::select(district, target)%>%
+
+  group_by(district)%>%
+
+  summarise(target=sum(target))
+
+
+
+
+
+
+
+# creating District summary data data set 
+
+Nation_tabel2<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-03-24")%>%
+
+  plotly::select(district, hw_dose_1male, hw_dose_1female, hw_dose2male, hw_dose2female, social_w_dose1male, social_w_dose1female, social_w_dose2male, social_w_dose2female, 
+
+  comorbids_dose1male, comorbids_dose1female, comorbids_dose2male, comorbids_dose2female, yeara_18_59_dose1male, years_18_59_dose1female, years_18_59_dose2male, years_18_59_dose2female, above_60_y_dose1male, above_60_y_dose1female, above_60_y_dose2male, above_60_y_dose2female, refugees_dose1male, refugees_dose1female, refugees_dose2male, refugees_dose2female, prisoners_dose1male, prisoners_dose1female, prisoners_dose2male, prisoners_dose2female, total_vacc)%>%
+
+   mutate(HW_total=round(hw_dose_1male+hw_dose_1female+hw_dose2male+hw_dose2female))%>%
+
+   mutate(sw_total=round(social_w_dose1male+social_w_dose1female+ social_w_dose2male+ social_w_dose2female))%>%
+
+  mutate(comb_total=round(comorbids_dose1male+comorbids_dose1female+ comorbids_dose2male+comorbids_dose2female))%>%
+
+  mutate(years_18_59=round(yeara_18_59_dose1male+ years_18_59_dose1female+years_18_59_dose2male+ years_18_59_dose2female))%>%
+
+  mutate(above_60=round(above_60_y_dose1male+above_60_y_dose1female+ above_60_y_dose2male+above_60_y_dose2female))%>%
+
+  mutate(ref_total=round(refugees_dose1male+refugees_dose1female+ refugees_dose2male+refugees_dose2female))%>%
+
+  mutate(pri_total= round(prisoners_dose1male+prisoners_dose1female+ prisoners_dose2male+prisoners_dose2female))%>%
+
+   group_by(district)%>%
+
+  summarise(HW_total=sum(HW_total),
+
+            sw_total=sum(sw_total), 
+
+            comb_total=sum(comb_total), 
+
+            years_18_59=sum(years_18_59), 
+
+            above_60=sum(above_60), 
+
+            ref_total=sum(ref_total), 
+
+            pri_total=sum(pri_total), 
+
+            total_vacc=sum(total_vacc))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# merging National Table 2 with National Target data set
+
+Nation_tabel2<-merge(National_target,Nation_tabel2, by="district")%>%
+
+    adorn_totals(where = "row")
+
+
+
+Nation_tabel2<-Nation_tabel2%>%
+
+    mutate(coverage=round(total_vacc/doses_available, digits = 3)*100)
+
+
+
+
+
+               
+
+
+
+health_tabel<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-03-24")%>%
+
+  plotly::select(district,health_facility, hw_dose_1male, hw_dose_1female, hw_dose2male, hw_dose2female, social_w_dose1male, social_w_dose1female, social_w_dose2male, social_w_dose2female, 
+
+  comorbids_dose1male, comorbids_dose1female, comorbids_dose2male, comorbids_dose2female, yeara_18_59_dose1male, years_18_59_dose1female, years_18_59_dose2male, years_18_59_dose2female, above_60_y_dose1male, above_60_y_dose1female, above_60_y_dose2male, above_60_y_dose2female, refugees_dose1male, refugees_dose1female, refugees_dose2male, refugees_dose2female, prisoners_dose1male, prisoners_dose1female, prisoners_dose2male, prisoners_dose2female, total_vacc)%>%
+
+   mutate(HW_total=round(hw_dose_1male+hw_dose_1female+hw_dose2male+hw_dose2female))%>%
+
+   mutate(sw_total=round(social_w_dose1male+social_w_dose1female+ social_w_dose2male+ social_w_dose2female))%>%
+
+  mutate(comb_total=round(comorbids_dose1male+comorbids_dose1female+ comorbids_dose2male+comorbids_dose2female))%>%
+
+  mutate(years_18_59=round(yeara_18_59_dose1male+ years_18_59_dose1female+years_18_59_dose2male+ years_18_59_dose2female))%>%
+
+  mutate(above_60=round(above_60_y_dose1male+above_60_y_dose1female+ above_60_y_dose2male+above_60_y_dose2female))%>%
+
+  mutate(ref_total=round(refugees_dose1male+refugees_dose1female+ refugees_dose2male+refugees_dose2female))%>%
+
+  mutate(pri_total= round(prisoners_dose1male+prisoners_dose1female+ prisoners_dose2male+prisoners_dose2female))%>%
+
+  drop_na(district,health_facility)%>%
+
+   group_by(health_facility)%>%
+
+  summarise(HW_total=sum(HW_total),
+
+            sw_total=sum(sw_total), 
+
+            comb_total=sum(comb_total), 
+
+            years_18_59=sum(years_18_59), 
+
+            above_60=sum(above_60), 
+
+            ref_total=sum(ref_total), 
+
+            pri_total=sum(pri_total), 
+
+            total_vacc=sum(total_vacc))
+
+
+
+
+
+
+
+
+
+# removing column 1 and 2
+
+health_facility_table<-targets%>%
+
+  plotly::select(-c(1,))
+
+
+
+# merging health facility table
+
+health_facility_table<-merge(health_facility_table,health_tabel, 
+
+                             by="health_facility" )
+
+
+
+
+
+health_facility_table<-health_facility_table%>%
+
+  adorn_totals(where = "row")%>%
+
+  mutate(coverage=round(total_vacc/target, digits = 3)*100)
+
+
+
+
+
+# cleaning variable names. 
+
+#booster_dose<-clean_names(booster_dose)
+
+#booster_dose$district<-str_to_lower(booster_dose$district)
+
+#booster_dose$health_facility<-str_to_lower(booster_dose$health_facility)
+
+
+
+#replacing na with 0
+
+#booster_dose[is.na(booster_dose)]<-0
+
+
+
+# creating subset of doses 2
+
+#dose2<-Covid_19_Vaccination%>%
+
+  #plotly::select(district, total_dose2)%>%
+
+  #group_by(district)%>%
+
+  #summarise(total_dose2=sum(total_dose2))
+
+
+
+
+
+
+
+#creating a subset of dose1 vaccination
+
+#dose1<-Covid_19_Vaccination%>%
+
+ #plotly::select(district, total_dose1)%>%
+
+  #group_by(district)%>%
+
+  #summarise(total_dose1=sum(total_dose1))
+
+
+
+# creating total dose of booster
+
+#booster_dose<-booster_dose%>%
+
+  #mutate(M_total=round(hw_dose2male+social_w_dose2male+comorbids_dose2male+years_18_59_dose2male+above_60_y_dose2male+refugees_dose2male+prisoners_dose2male))%>%
+
+  #mutate(F_total=round(hw_dose2female+social_w_dose2female+comorbids_dose2female+years_18_59_dose2female+above_60_y_dose2female+refugees_dose2female+prisoners_dose2female))%>%
+
+  #mutate(B_Total=round(M_total+F_total))
+
+
+
+## creating subdata set
+
+#National_dose2<-dose2%>%
+
+ # plotly::select(district, total_dose2)%>%
+
+  #group_by(district)%>%
+
+  #summarise(total_dose2=sum(total_dose2))
+
+
+
+
+
+#National_booster<-booster_dose%>%
+
+ # plotly::select(district, B_Total)%>%
+
+ # group_by(district)%>%
+
+  #summarise(B_Total=sum(B_Total))
+
+
+
+#National_total_dose<-merge(National_booster, National_dose2,by="district")
+
+
+
+#National_total_dose<-merge(National_total_dose, dose1, by="district")
+
+
+
+#National_vaccion_coverage<-National_total_dose%>%
+
+  #mutate(boo_doses=round(B_Total+total_dose2))%>%
+
+  #mutate(total_dose_utilized=round(boo_doses+total_dose1))%>%
+
+  #plotly::select(district, total_dose1, boo_doses, total_dose_utilized)
+
+
+
+# creating subdate set for lilongwe and Kasungu
+
+#district<-c("lilongwe", "kasungu")
+
+#total_dose1<-c(8900, 6022)
+
+#boo_doses<-c(0, 0)
+
+#total_dose_utilized<-c( 8900, 6022)
+
+
+
+#new_doses<-data.frame(district, total_dose1, boo_doses,total_dose_utilized)
+
+
+
+
+
+# union of two data set
+
+
+
+#National_vaccion_coverage<-union_all(National_vaccion_coverage, new_doses)
+
+
+
+```
+
+
+
+
+
+
+
+
+# Home page
+
+
+
+## Column 1 {data-width="500"}
+
+
+
+
+```{r, fig.width=6, fig.height=6}
+
+
+
+na_target<-National_target%>%
+
+      summarise(doses_available=sum(doses_available))
+
+
+
+na_total<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-03-24")%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+na_dose1<-Covid_19_Vaccination%>%
+
+   filter(date>="2024-03-24")%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+na_dose2<-Covid_19_Vaccination%>%
+
+   filter(date>="2024-03-24")%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+na_male<-Covid_19_Vaccination%>%
+
+   filter(date>="2024-03-24")%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+na_female<-Covid_19_Vaccination%>%
+
+   filter(date>="2024-03-24")%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+national_table<-merge(na_target, na_total)
+
+
+
+national_table<-merge(national_table, na_dose1)
+
+
+
+national_table<-merge(national_table, na_dose2)
+
+
+
+national_table<-merge(national_table, na_male)
+
+
+
+national_table<-merge(national_table, na_female)
+
+
+
+national_table<-national_table%>%
+
+  mutate(coverage=scales::percent(total_vacc/doses_available, 0.1))
+
+
+
+# national_table%>%
+
+#   flextable()%>%
+
+#   autofit()%>%
+
+#   set_header_labels(
+
+#      doses_available="Target",  
+
+#     total_vacc="Total Vaccinated", 
+
+#     total_dose1="First Dose", 
+
+#     total_dose2="Booster", 
+
+#     male="Male",
+
+#     female="Female", 
+
+#   Coverage="National Coverage"
+
+#     )%>%
+
+#   bg(part = "header", bg = "skyblue")
+
+# 
+
+
+
+  
+
+# Calcuating Totals 
+
+
+
+#district_targtes<-rbind(district_targtes, data.frame(district='Total', t(colSums(district_targtes[,-1]))))
+
+
+
+
+
+#District_Vacc<-rbind(District_Vacc, data.frame(district='Total', t(colSums(District_Vacc[,-1]))))
+
+
+
+# merging two data set
+
+#District_coverage<-merge(district_targtes, District_Vacc, by="district")
+
+
+
+ # calculating the coverage
+
+#District_coverage<-District_coverage%>%
+
+  #mutate(Vaccine_Coverage=round(total_vacc/targets, digits = 3)*100)
+
+  
+
+
+
+
+
+
+
+```
+
+
+
+
+### National Coverage 
+
+
+```{r}
+
+
+
+gauge(national_table$coverage, min = 0, max = 100, symbol ='%', gaugeSectors(
+
+success = c(80, 100), warning = c(40, 79), danger = c(0, 39)
+
+))
+
+```
+
+
+
+
+
+
+
+
+### Total Vaccinated
+
+
+```{r}
+
+valueBox(na_total, icon = "fa-users", 
+
+         color = "deepskyblue"
+
+         )
+
+
+
+
+
+```
+
+
+
+
+
+
+### First Dose Vaccinated 
+
+
+```{r}
+
+
+
+valueBox(na_dose1, icon = "fa-users", 
+
+         color = "lightblue"
+
+         )
+
+```
+
+
+
+
+
+
+### Second Dose Vaccinated 
+
+
+
+
+```{r}
+
+
+
+valueBox(na_dose2, icon = "fa-users", 
+
+         color = "deepskyblue"
+
+         )
+
+```
+
+
+
+
+### Male Vaccinated 
+
+
+
+
+```{r}
+
+
+
+valueBox(na_male, icon = "fa-male", 
+
+         color = "lightblue"
+
+         )
+
+
+
+```
+
+
+
+
+
+
+### Female Vaccinated 
+
+
+```{r}
+
+
+
+valueBox(na_female, icon = "fa-female", 
+
+         color = "deepskyblue"
+
+         )
+
+
+
+```
+
+
+
+
+
+
+
+
+## Column 2 {data-width="300"} {.tabset}
+
+
+
+### Doses Compsuption and Coverage
+
+
+
+
+```{r}
+
+
+
+District_Vacc<-Covid_19_Vaccination%>%
+
+  filter(district!="Loading...")%>%
+
+  filter(date>="2024-03-24")%>%
+
+  plotly::select(district, total_vacc)%>%
+
+  group_by(district)%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+ 
+
+district_targtes<-targets%>%
+
+  plotly::select(district, target)%>%
+
+  group_by(district)%>%
+
+  summarise(targets=sum(target))
+
+  
+
+
+
+
+
+# plotting 
+
+National_coverage_Fig<-Nation_tabel2%>%
+
+  filter(district!="Total")%>%
+
+  ggplot(aes( reorder(x=district, coverage), y=coverage))+
+
+  geom_col(fill="tomato")+
+
+  coord_flip()+
+
+  theme_minimal()+
+
+  geom_text(aes(x=district, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=2.5)+
+
+  labs(y="Vaccination Coverage", 
+
+       x="District", 
+
+       title = "Malawi Covid-19 Vaccination Campagin" 
+
+       )
+
+  
+
+
+
+
+
+National_doses_Cons<-Nation_tabel2%>%
+
+  filter(district!="Total")%>%
+
+  ggplot(aes( reorder(x=district, total_vacc), y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  coord_flip()+
+
+  theme_minimal()+
+
+  theme(axis.text.x =  element_text(angle = 60))+
+
+  geom_text(aes(x=district, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+0.9, color="black", size=2.5)+
+
+  labs(y="Dose Consuption", 
+
+       x="District"
+
+       )
+
+
+
+
+
+#write.csv(Nation_tabel2,file='covid-19.csv')
+
+
+
+
+
+
+
+ ggarrange(National_coverage_Fig, National_doses_Cons, ncol = 2, nrow = 1)
+
+```
+
+
+
+
+
+
+
+
+
+
+### National COVID-19 Vaccination Daily Trend
+
+
+
+
+```{r, fig.width=6}
+
+Number_of_doses_per_day<-Covid_19_Vaccination%>%
+
+  plotly::select(date, total_vacc)%>%
+
+   group_by(date)%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+
+
+Number_of_doses_per_day%>%
+
+  filter(date>="2024-03-24")%>%
+
+   ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 9, angle = 0))+
+
+  labs(y=" Vaccinated ", 
+
+       caption = "Data: EPI District daily Vacination report")+
+
+  ggtitle(label = "National daily trend Vaccination campagin", 
+
+          subtitle = "March 25 to 02 April-2024")
+
+  #  annotate(
+
+  #   "text",
+
+  #   x = max(Covid_19_Vaccination$date, na.rm = T) -32 ,
+
+  #   y = 40000,
+
+  #   label = "January Campaign",
+
+  #   angle = 0)+
+
+  #   annotate(
+
+  #   "text",
+
+  #   x = max(Covid_19_Vaccination$date, na.rm = T) -11 ,
+
+  #   y = 30000,
+
+  #   label = " Feb-Round 1 Campaign",
+
+  #   angle = 65)+
+
+  # annotate(
+
+  #   "text",
+
+  #   x = max(Covid_19_Vaccination$date, na.rm = T) -2 ,
+
+  #   y = 40000,
+
+  #   label = "Feb-Round 2 Campaign",
+
+  #   angle = 65)+
+
+  # annotate(
+
+  #   "rect",
+
+  #  xmin =  max(Covid_19_Vaccination$date, na.rm = T) -39 , # note must be wrapped in as.Date()
+
+  # xmax  = max(Covid_19_Vaccination$date, na.rm = T) -28.5,               ymin  = 0,
+
+  #   ymax  = Inf,
+
+  #   alpha = 0.2,          # alpha easy and intuitive to adjust using annotate()
+
+  #   fill  = "skyblue")+
+
+  # annotate(
+
+  #   "rect",
+
+  #  xmin =  max(Covid_19_Vaccination$date, na.rm = T) -4 , # note must be wrapped in as.Date()
+
+  #   xmax  = as.Date(Inf),                                          # note must be wrapped in as.Date()
+
+  #   ymin  = 0,
+
+  #   ymax  = Inf,
+
+  #   alpha = 0.2,          # alpha easy and intuitive to adjust using annotate()
+
+  #   fill  = "skyblue")
+
+  
+
+  #geom_text(aes(x=Date, y=total_vacc,label=total_vacc),
+
+           # vjust=0.5, hjust=-0.5, color="black", size=2.5)+
+
+
+
+
+
+```
+
+
+
+
+### Coverage by Sex per District
+
+
+
+
+```{r, fig.width=6}
+
+# creating object of male vaccination
+
+male_vac_status<-Covid_19_Vaccination%>%
+
+  filter(district!="Loading...")%>%
+
+  filter(date>="2024-03-24")%>%
+
+  plotly::select(district, total_dose1_male, total_dose2_male)%>%
+
+  mutate(total_male_vac=round(total_dose1_male+total_dose2_male))%>%
+
+  group_by(district)%>%
+
+  summarise(total_male_vac=sum(total_male_vac))
+
+
+
+
+
+male_vac_status<-merge(Nation_tabel2, male_vac_status, by="district")
+
+
+
+male_vac_status<-male_vac_status%>%
+
+  mutate(male_cov=round(total_male_vac/total_vacc, digits = 3)*100)%>%
+
+  plotly::select(-c(2:12),)
+
+
+
+
+
+  
+
+
+
+# creating object of female Vaccination 
+
+female_vac_status<-Covid_19_Vaccination%>%
+
+  filter(district!="Loading...")%>%
+
+  filter(date>="2024-03-24")%>%
+
+  plotly::select(district, total_dose1_female, total_dose2_female)%>%
+
+  mutate(total_female_vac=round(total_dose2_female+total_dose1_female))%>%
+
+  group_by(district)%>%
+
+  summarise(total_female_vac=sum(total_female_vac))
+
+
+
+
+
+
+
+female_vac_status<-merge(Nation_tabel2, female_vac_status, by="district")
+
+
+
+female_vac_status<-female_vac_status%>%
+
+  mutate(female_cov=round(total_female_vac/total_vacc, digits = 3)*100)%>%
+
+  plotly::select(-c(2:12),)
+
+
+
+
+
+
+
+
+
+# combining male and female object into one data set
+
+sex_vac_staus<-merge(male_vac_status, female_vac_status, by="district", all.y = TRUE)
+
+
+
+
+
+# structure of the data set
+
+sex_vac_staus2 <- sex_vac_staus %>% 
+
+pivot_longer(
+
+col = c(male_cov, female_cov),#cols to elongate
+
+    names_to = "gender", # name for new col of categories
+
+    values_to = "Coverage")
+
+
+
+# changing district from strict to factor variable
+
+sex_vac_staus2$district<-as.factor(sex_vac_staus2$district)
+
+
+
+sex_vac_staus2<-sex_vac_staus2%>%
+
+  arrange(Coverage)
+
+
+
+
+
+age_pyramid(data= sex_vac_staus2,
+
+            age_group = "district",
+
+            split_by = "gender",
+
+             count = "Coverage",
+
+            show_midpoint= F,
+
+            pal=c("deepskyblue" , "darkorange"))+
+
+  theme_minimal()+
+
+  xlab("District")+
+
+  ylab( "Coverage")+
+
+  theme(axis.title = element_text(face = "bold", size = 10, colour = "black"))+
+
+  theme(axis.text.x = element_text(angle = 90, face = "bold", colour = "black"))+
+
+  theme(axis.text.y = element_text(angle = 0, face = "bold", colour = "black"))+
+
+  theme(legend.title = element_text(face = "bold", colour = "black"))+
+
+    scale_fill_manual(     
+
+    values = c("female_cov" = "deepskyblue",     
+
+               "male_cov" = "darkorange"),
+
+    labels = c("female_cov" = "female",          
+
+              "male_cov" = "male",
+
+              "Missing"),
+
+    name = "Gender",                  
+
+    na.value = "grey" )                
+
+  
+
+
+
+
+
+```
+
+
+
+
+# Overview {.sidebar}
+
+
+
+![](images/Ministry-of-Health-Malawi.jpg){width="200"}
+
+
+
+![](images/WHO%20Logo.PNG){width="200" height="133"}
+
+
+
+![](images/unicef%20log.png){width="181"}
+
+
+
+![](images/USAID%20MOMENTUM%20HD%20logo-Back%20grey%20T-shirt.png){width="200" height="100"}
+
+
+
+*The Ministry of Health though Expanded Immunization Progamme (EPI), and Parthers, World Bank, WHO, UNICEF, MRC, and Momentum are Conducting Covid-19 Vaccination Campaign in all 29 health districts of Malawi from 18 Feb to 1st March 2024*
+
+
+
+*The report is as of `r Sys.Date()-1`*
+
+
+
+# District Vaccination trends
+
+
+
+## Column 1 {data-width="600"} {.tabset}
+
+
+
+### District trends
+
+
+
+
+```{r, fig.width=7, fig.height=9}
+
+daily_ditrict_trends<-Covid_19_Vaccination%>%
+
+  filter(district!="Loading...")%>%
+
+  filter(date>="2024-03-24")%>%
+
+  plotly::select(date, district, total_vacc)%>%
+
+   group_by(date, district)%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+
+
+daily_ditrict_trends%>%
+
+  filter(total_vacc>=500)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 7))+
+
+    #geom_text(aes(x=Date, y=total_vacc,label=total_vacc),
+
+           # vjust=0.5, hjust=-0.5, color="black", size=2.5)+
+
+  facet_wrap(~district, ncol = 4, nrow = 8)
+
+  
+
+
+
+
+
+```
+
+
+
+
+### Impact of Floods on Vaccination Nkhotakota
+
+
+
+
+```{r}
+
+
+
+District_trends<-Covid_19_Vaccination%>%
+
+  plotly::select(date, district, total_vacc)%>%
+
+   group_by(date, district)%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+
+
+District_trends%>%
+
+  filter(district=="nkhotakota")%>%
+
+  filter(date>="2024-01-20")%>%
+
+   ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 9, angle = 0))+
+
+  labs(y=" Vaccinated ", 
+
+       caption = "Data: EPI District daily Vacination report")+
+
+  ggtitle(label = "Karonga daily trend Vaccination campagin", 
+
+          subtitle = "18 Feb to 1 March 2024")+
+
+   annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -30 ,
+
+    y = 400,
+
+    label = "January Campaign not included",
+
+    angle = 0)+
+
+    annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -11 ,
+
+    y = 300,
+
+    label = " Round 1",
+
+    angle = 65)+
+
+  annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -4 ,
+
+    y = 400,
+
+    label = "Round 2",
+
+    angle = 65)+
+
+  annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -4 ,
+
+    y = 1000,
+
+    label = "Flooding",
+
+    angle = 90)+
+
+  annotate(
+
+    "rect",
+
+   xmin =  max(Covid_19_Vaccination$date, na.rm = T) -39 , # note must be wrapped in as.Date()
+
+  xmax  = max(Covid_19_Vaccination$date, na.rm = T) -28.5,               ymin  = 0,
+
+    ymax  = Inf,
+
+    alpha = 0.2,          # alpha easy and intuitive to adjust using annotate()
+
+    fill  = "skyblue")+
+
+  annotate(
+
+    "rect",
+
+   xmin =  max(Covid_19_Vaccination$date, na.rm = T) -5.8 , # note must be wrapped in as.Date()
+
+    xmax  = as.Date(Inf),                                          # note must be wrapped in as.Date()
+
+    ymin  = 0,
+
+    ymax  = Inf,
+
+    alpha = 0.2,          # alpha easy and intuitive to adjust using annotate()
+
+    fill  = "skyblue")+
+
+annotate("segment", x=max(Covid_19_Vaccination$date, na.rm = T)-3.6,
+
+         xend=max(Covid_19_Vaccination$date, na.rm = T)-3.6,
+
+         y = 0, yend = 1500, colour = "blue")
+
+  
+
+  #geom_text(aes(x=Date, y=total_vacc,label=total_vacc),
+
+           # vjust=0.5, hjust=-0.5, color="black", size=2.5)+
+
+
+
+#District_trends%>%
+
+ # filter(district=="karonga")%>%
+
+ # filter(date>="2024-02-25", date<="2024-03-05")%>%
+
+ # summarise(total_vacc=sum(total_vacc))%>%
+
+ # adorn_totals(where = "row")
+
+
+
+
+
+
+
+```
+
+
+
+
+### Impact of Floods on Vaccination Karonga
+
+
+
+
+```{r}
+
+
+
+District_trends<-Covid_19_Vaccination%>%
+
+  plotly::select(date, district, total_vacc)%>%
+
+   group_by(date, district)%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+
+
+District_trends%>%
+
+  filter(district=="karonga")%>%
+
+  filter(date>="2024-01-20")%>%
+
+   ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 9, angle = 0))+
+
+  labs(y=" Vaccinated ", 
+
+       caption = "Data: EPI District daily Vacination report")+
+
+  ggtitle(label = "Karonga daily trend Vaccination campagin", 
+
+          subtitle = "18 Feb to 1 March 2024")+
+
+   annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -30 ,
+
+    y = 400,
+
+    label = "January Campaign not included",
+
+    angle = 0)+
+
+    annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -11 ,
+
+    y = 300,
+
+    label = " Round 1",
+
+    angle = 65)+
+
+  annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -4 ,
+
+    y = 400,
+
+    label = "Round 2",
+
+    angle = 65)+
+
+  annotate(
+
+    "text",
+
+    x = max(Covid_19_Vaccination$date, na.rm = T) -8 ,
+
+    y = 200,
+
+    label = "Flooding",
+
+    angle = 90)+
+
+  annotate(
+
+    "rect",
+
+   xmin =  max(Covid_19_Vaccination$date, na.rm = T) -39 , # note must be wrapped in as.Date()
+
+  xmax  = max(Covid_19_Vaccination$date, na.rm = T) -28.5,               ymin  = 0,
+
+    ymax  = Inf,
+
+    alpha = 0.2,          # alpha easy and intuitive to adjust using annotate()
+
+    fill  = "skyblue")+
+
+  annotate(
+
+    "rect",
+
+   xmin =  max(Covid_19_Vaccination$date, na.rm = T) -5.8 , # note must be wrapped in as.Date()
+
+    xmax  = as.Date(Inf),                                          # note must be wrapped in as.Date()
+
+    ymin  = 0,
+
+    ymax  = Inf,
+
+    alpha = 0.2,          # alpha easy and intuitive to adjust using annotate()
+
+    fill  = "skyblue")+
+
+annotate("segment", x=max(Covid_19_Vaccination$date, na.rm = T)-7.6,
+
+         xend=max(Covid_19_Vaccination$date, na.rm = T)-7.6,
+
+         y = 0, yend = 500, colour = "blue")
+
+  
+
+  #geom_text(aes(x=Date, y=total_vacc,label=total_vacc),
+
+           # vjust=0.5, hjust=-0.5, color="black", size=2.5)+
+
+
+
+#District_trends%>%
+
+ # filter(district=="karonga")%>%
+
+ # filter(date>="2024-02-25", date<="2024-03-05")%>%
+
+ # summarise(total_vacc=sum(total_vacc))%>%
+
+ # adorn_totals(where = "row")
+
+
+
+
+
+
+
+```
+
+
+
+
+## Column 2 {data="width=600"}
+
+
+
+### District spatial distribution
+
+
+
+Please note for Mzimba we have add total doses for Mzimba south and North
+
+
+
+
+```{r, fig.width=7, fig.height=7}
+
+
+
+# loading shape file 
+
+
+
+vac_shapefile<-st_read("gadm36_MWI_1.shp")
+
+
+
+
+
+# changing  column number 4 
+
+colnames(vac_shapefile)[4]<-"district"
+
+
+
+# changing value names of district to lower case
+
+vac_shapefile$district<-str_to_lower(vac_shapefile$district)
+
+
+
+New_data1<-Nation_tabel2%>%
+
+    plotly::select(district, coverage)%>%
+
+    group_by(district)%>%
+
+    summarise(coverage=sum(coverage))%>%
+
+    mutate(district=recode(district, 
+
+        "mzimba south"="mzimba", 
+
+        "nkhatabay"="nkhata bay"))%>%
+
+    filter(district!="Total")
+
+
+
+
+
+
+
+New_data1$district<-str_to_lower(New_data1$district)
+
+    
+
+
+
+
+
+#district<-c("mzimba")
+
+#total_vacc<-c(10961)
+
+
+
+#new_data2<-data.frame(district, total_vacc)
+
+
+
+
+
+#New_data3<-union_all(New_data1, new_data2)
+
+
+
+
+
+
+
+vac_shapefile2<-merge(vac_shapefile, New_data1, 
+
+                      by="district")
+
+
+
+tmap_mode("view")+
+
+tm_shape(vac_shapefile2)+
+
+    tm_borders()+
+
+    tm_polygons(col="coverage",title="Coverage(%).", style="cont", 
+
+   palette=get_brewer_pal(palette="OrRd", n=5,plot=FALSE))+
+
+  tm_layout(frame = TRUE,
+
+            #legend.position = c("left", "bottom"), 
+
+            legend.text.size = 0.5,legend.title.size = 0.5)+
+
+  #tm_compass(position = c("right", "top"))+
+
+  tm_text("district", size = 0.4, col = "black")+
+
+  tm_scale_bar()
+
+
+
+
+
+```
+
+
+
+
+# Lilongwe {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Lilongwe Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+
+
+Lilongwe_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="lilongwe")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+
+
+lilongwe_coverage<-health_facility_table%>%
+
+  filter(district=="lilongwe")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(lilongwe_coverage, Lilongwe_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+lilongwe_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="lilongwe")
+
+
+
+ll_total<-lilongwe_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ll_dose1<-lilongwe_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ll_dose2<-lilongwe_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ll_male<-lilongwe_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ll_female<-lilongwe_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+lilongwe_table<-merge(ll_total, ll_dose1)
+
+
+
+lilongwe_table<-merge(lilongwe_table, ll_dose2)
+
+
+
+lilongwe_table<-merge(lilongwe_table, ll_male)
+
+
+
+lilongwe_table<-merge(lilongwe_table, ll_female)
+
+
+
+lilongwe_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Select health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+lilongwe_data%>%
+
+  filter(total_vacc>=150)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+```
+
+
+
+
+# Blantyre {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Blantyre Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+
+
+blantyre_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="blantyre")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+
+
+
+
+blantyre_coverage<-health_facility_table%>%
+
+  filter(district=="blantyre")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(blantyre_coverage, blantyre_consuption, ncol=2, nrow=1)
+
+
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+blantyre_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="blantyre")
+
+
+
+bt_total<-blantyre_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+bt_dose1<-blantyre_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+bt_dose2<-blantyre_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+bt_male<-blantyre_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+bt_female<-blantyre_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+blantyre_table<-merge(bt_total, bt_dose1)
+
+
+
+blantyre_table<-merge(blantyre_table, bt_dose2)
+
+
+
+blantyre_table<-merge(blantyre_table, bt_male)
+
+
+
+blantyre_table<-merge(blantyre_table, bt_female)
+
+
+
+blantyre_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Select health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+blantyre_data%>%
+
+  filter(total_vacc>=100)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+```
+
+
+
+
+# Dowa {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Dowa Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+
+
+dowa_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="dowa")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+
+
+dowa_coverage<-health_facility_table%>%
+
+  filter(district=="dowa")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(dowa_coverage, dowa_consuption, ncol=2, nrow=1)
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+dowa_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="dowa")
+
+
+
+do_total<-dowa_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+do_dose1<-dowa_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+do_dose2<-dowa_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+do_male<-dowa_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+do_female<-dowa_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+dowa_table<-merge(do_total, do_dose1)
+
+
+
+dowa_table<-merge(dowa_table, do_dose2)
+
+
+
+dowa_table<-merge(dowa_table, do_male)
+
+
+
+dowa_table<-merge(dowa_table, do_female)
+
+
+
+dowa_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+dowa_data%>%
+
+  filter(total_vacc>=150)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+```
+
+
+
+
+# Machinga {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Machinga Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+machinga_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="machinga")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+machinga_coverage<-health_facility_table%>%
+
+  filter(district=="machinga")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(machinga_coverage, machinga_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+machinga_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="machinga")
+
+
+
+mh_total<-machinga_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mh_dose1<-machinga_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mh_dose2<-machinga_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mh_male<-machinga_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mh_female<-machinga_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+machinga_table<-merge(mh_total, mh_dose1)
+
+
+
+machinga_table<-merge(machinga_table, mh_dose2)
+
+
+
+machinga_table<-merge(machinga_table, mh_male)
+
+
+
+machinga_table<-merge(machinga_table, mh_female)
+
+
+
+machinga_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Select health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+machinga_data%>%
+
+  filter(total_vacc>=100)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Mangochi {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Mangochi Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+mangochi_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mangochi")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+mangochi_coverage<-health_facility_table%>%
+
+  filter(district=="mangochi")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(mangochi_coverage, mangochi_consuption, ncol=2, nrow=1)
+
+
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+mangochi_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mangochi")
+
+
+
+mg_total<-mangochi_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mg_dose1<-mangochi_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mg_dose2<-mangochi_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mg_male<-mangochi_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mg_female<-mangochi_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+mangochi_table<-merge(mg_total, mg_dose1)
+
+
+
+mangochi_table<-merge(mangochi_table, mg_dose2)
+
+
+
+mangochi_table<-merge(mangochi_table, mg_male)
+
+
+
+mangochi_table<-merge(mangochi_table, mg_female)
+
+
+
+mangochi_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+mangochi_data%>%
+
+  filter(total_vacc>=100)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Thyolo {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Thyolo Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+thyolo_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="thyolo")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+thyolo_coverage<-health_facility_table%>%
+
+  filter(district=="thyolo")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(thyolo_coverage, thyolo_consuption, ncol=2, nrow=1)
+
+
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+thyolo_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="thyolo")
+
+
+
+ty_total<-thyolo_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ty_dose1<-thyolo_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ty_dose2<-thyolo_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ty_male<-thyolo_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ty_female<-thyolo_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+thyolo_table<-merge(ty_total, ty_dose1)
+
+
+
+thyolo_table<-merge(thyolo_table, ty_dose2)
+
+
+
+thyolo_table<-merge(thyolo_table, ty_male)
+
+
+
+thyolo_table<-merge(thyolo_table, ty_female)
+
+
+
+thyolo_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+thyolo_data%>%
+
+  filter(total_vacc>=150)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Chikwawa {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Chikwawa Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+chikwawa_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="chikwawa")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+chikwawa_coverage<-health_facility_table%>%
+
+  filter(district=="chikwawa")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(chikwawa_coverage, chikwawa_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+chikwawa_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="chikwawa")
+
+
+
+ck_total<-chikwawa_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ck_dose1<-chikwawa_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ck_dose2<-chikwawa_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ck_male<-chikwawa_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ck_female<-chikwawa_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+chikwawa_table<-merge(ck_total, ck_dose1)
+
+
+
+chikwawa_table<-merge(chikwawa_table, ck_dose2)
+
+
+
+chikwawa_table<-merge(chikwawa_table, ck_male)
+
+
+
+chikwawa_table<-merge(chikwawa_table, ck_female)
+
+
+
+chikwawa_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+chikwawa_data%>%
+
+  filter(total_vacc>=100)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Nsanje {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Nsanje Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+nsanje_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="nsanje")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+nsanje_coverage<-health_facility_table%>%
+
+  filter(district=="nsanje")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(nsanje_coverage, nsanje_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+nsanje_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="nsanje")
+
+
+
+ns_total<-nsanje_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ns_dose1<-nsanje_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ns_dose2<-nsanje_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ns_male<-nsanje_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ns_female<-nsanje_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+nsanje_table<-merge(ns_total, ns_dose1)
+
+
+
+nsanje_table<-merge(nsanje_table, ns_dose2)
+
+
+
+nsanje_table<-merge(nsanje_table, ns_male)
+
+
+
+nsanje_table<-merge(nsanje_table, ns_female)
+
+
+
+nsanje_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+nsanje_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Mzimba North {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Mzimba North Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+mzimba_north_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mzimba north")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+mzimba_north_coverage<-health_facility_table%>%
+
+  filter(district=="mzimba north")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(mzimba_north_coverage, mzimba_north_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+mzimba_n_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mzimba north")
+
+
+
+mzn_total<-mzimba_n_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mzn_dose1<-mzimba_n_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mzn_dose2<-mzimba_n_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mzn_male<-mzimba_n_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mzn_female<-mzimba_n_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+mzimba_n_table<-merge(mzn_total, mzn_dose1)
+
+
+
+mzimba_n_table<-merge(mzimba_n_table, mzn_dose2)
+
+
+
+mzimba_n_table<-merge(mzimba_n_table, mzn_male)
+
+
+
+mzimba_n_table<-merge(mzimba_n_table, mzn_female)
+
+
+
+mzimba_n_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+mzimba_n_data%>%
+
+  filter(total_vacc>=200)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Mzimba South {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Mzimba South Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+mzimba_south_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mzimba south")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+mzimba_south_coverage<-health_facility_table%>%
+
+  filter(district=="mzimba south")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(mzimba_south_coverage, mzimba_south_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+mzimba_S_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mzimba south")
+
+
+
+mzs_total<-mzimba_S_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mzs_dose1<-mzimba_S_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mzs_dose2<-mzimba_S_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mzs_male<-mzimba_S_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mzs_female<-mzimba_S_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+mzimba_s_table<-merge(mzs_total, mzs_dose1)
+
+
+
+mzimba_s_table<-merge(mzimba_s_table, mzs_dose2)
+
+
+
+mzimba_s_table<-merge(mzimba_s_table, mzs_male)
+
+
+
+mzimba_s_table<-merge(mzimba_s_table, mzs_female)
+
+
+
+mzimba_s_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+mzimba_S_data%>%
+
+  filter(total_vacc>=100)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Kasungu {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Kasungu Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+kasungu_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="kasungu")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+kasungu_coverage<-health_facility_table%>%
+
+  filter(district=="kasungu")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(kasungu_coverage, kasungu_consuption, ncol=2, nrow=1)
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+kasungu_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="kasungu")
+
+
+
+ks_total<-kasungu_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ks_dose1<-kasungu_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ks_dose2<-kasungu_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ks_male<-kasungu_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ks_female<-kasungu_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+kasungu_table<-merge(ks_total, ks_dose1)
+
+
+
+kasungu_table<-merge(kasungu_table, ks_dose2)
+
+
+
+kasungu_table<-merge(kasungu_table, ks_male)
+
+
+
+kasungu_table<-merge(kasungu_table, ks_female)
+
+
+
+kasungu_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+kasungu_data%>%
+
+  filter(total_vacc>=100)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Neno {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Neno Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+neno_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="neno")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+neno_coverage<-health_facility_table%>%
+
+  filter(district=="neno")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(neno_coverage, neno_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+neno_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="neno")
+
+
+
+ne_total<-neno_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ne_dose1<-neno_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ne_dose2<-neno_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ne_male<-neno_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ne_female<-neno_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+neno_table<-merge(ne_total, ne_dose1)
+
+
+
+neno_table<-merge(neno_table, ne_dose2)
+
+
+
+neno_table<-merge(neno_table, ne_male)
+
+
+
+neno_table<-merge(neno_table, ne_female)
+
+
+
+neno_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+neno_data%>%
+
+  filter(total_vacc>=25)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Rumphi {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Rumphi Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+rumphi_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="rumphi")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+rumphi_coverage<-health_facility_table%>%
+
+  filter(district=="rumphi")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(rumphi_coverage, rumphi_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+rumphi_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="rumphi")
+
+
+
+ru_total<-rumphi_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ru_dose1<-rumphi_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ru_dose2<-rumphi_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ru_male<-rumphi_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ru_female<-rumphi_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+rumphi_table<-merge(ru_total, ru_dose1)
+
+
+
+rumphi_table<-merge(rumphi_table, ru_dose2)
+
+
+
+rumphi_table<-merge(rumphi_table, ru_male)
+
+
+
+rumphi_table<-merge(rumphi_table, ru_female)
+
+
+
+rumphi_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+rumphi_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Chitipa {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Chitipa Health facility
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+chitipa_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="chitipa")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+chitipa_coverage<-health_facility_table%>%
+
+  filter(district=="chitipa")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(chitipa_coverage, chitipa_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+chitipa_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="chitipa")
+
+
+
+ct_total<-chitipa_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ct_dose1<-chitipa_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ct_dose2<-chitipa_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ct_male<-chitipa_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ct_female<-chitipa_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+chitipa_table<-merge(ct_total, ct_dose1)
+
+
+
+chitipa_table<-merge(chitipa_table, ct_dose2)
+
+
+
+chitipa_table<-merge(chitipa_table, ct_male)
+
+
+
+chitipa_table<-merge(chitipa_table, ct_female)
+
+
+
+chitipa_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+chitipa_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Likoma {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Likoma Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+likoma_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="likoma")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+likoma_coverage<-health_facility_table%>%
+
+  filter(district=="likoma")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(likoma_coverage, likoma_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+likoma_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="likoma")
+
+
+
+lk_total<-likoma_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+lk_dose1<-likoma_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+lk_dose2<-likoma_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+lk_male<-likoma_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+lk_female<-likoma_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+likoma_table<-merge(lk_total, lk_dose1)
+
+
+
+likoma_table<-merge(likoma_table, lk_dose2)
+
+
+
+likoma_table<-merge(likoma_table, lk_male)
+
+
+
+likoma_table<-merge(likoma_table, lk_female)
+
+
+
+likoma_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Select health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+likoma_data%>%
+
+  filter(total_vacc>=0)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Nkhat bay {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Nkhata Bay Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+nkhatabay_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="nkhatabay")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+nkhatabay_coverage<-health_facility_table%>%
+
+  filter(district=="nkhatabay")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(nkhatabay_coverage, nkhatabay_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+nkhatabay_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="nkhatabay")
+
+
+
+nb_total<-nkhatabay_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+nb_dose1<-nkhatabay_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+nb_dose2<-nkhatabay_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+nb_male<-nkhatabay_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+nb_female<-nkhatabay_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+nkhatabay_table<-merge(nb_total, nb_dose1)
+
+
+
+nkhatabay_table<-merge(nkhatabay_table, nb_dose2)
+
+
+
+nkhatabay_table<-merge(nkhatabay_table, nb_male)
+
+
+
+nkhatabay_table<-merge(nkhatabay_table, nb_female)
+
+
+
+nkhatabay_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+nkhatabay_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Nkhotakota {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Nkhotakota Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+nkhotakota_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="nkhotakota")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+nkhotakota_coverage<-health_facility_table%>%
+
+  filter(district=="nkhotakota")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(nkhotakota_coverage, nkhotakota_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+nkhotakota_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="nkhotakota")
+
+
+
+kk_total<-nkhotakota_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+kk_dose1<-nkhotakota_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+kk_dose2<-nkhotakota_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+kk_male<-nkhotakota_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+kk_female<-nkhotakota_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+nkhotakota_table<-merge(kk_total, kk_dose1)
+
+
+
+nkhotakota_table<-merge(nkhotakota_table, kk_dose2)
+
+
+
+nkhotakota_table<-merge(nkhotakota_table, kk_male)
+
+
+
+nkhotakota_table<-merge(nkhotakota_table, kk_female)
+
+
+
+nkhotakota_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+nkhotakota_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Mwanza {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Mwanza Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+mwanza_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mwanza")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+mwanza_coverage<-health_facility_table%>%
+
+  filter(district=="mwanza")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(mwanza_coverage, mwanza_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+mwanza_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mwanza")
+
+
+
+mn_total<-mwanza_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mn_dose1<-mwanza_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mn_dose2<-mwanza_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mn_male<-mwanza_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mn_female<-mwanza_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+mwanza_table<-merge(mn_total, mn_dose1)
+
+
+
+mwanza_table<-merge(mwanza_table, mn_dose2)
+
+
+
+mwanza_table<-merge(mwanza_table, mn_male)
+
+
+
+mwanza_table<-merge(mwanza_table, mn_female)
+
+
+
+mwanza_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+mwanza_data%>%
+
+  filter(total_vacc>=10)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Zomba {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Zomba Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+zomba_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="zomba")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+zomba_coverage<-health_facility_table%>%
+
+  filter(district=="zomba")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(zomba_coverage, zomba_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+zomba_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="zomba")
+
+
+
+za_total<-zomba_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+za_dose1<-zomba_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+za_dose2<-zomba_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+za_male<-zomba_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+za_female<-zomba_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+zomba_table<-merge(za_total, za_dose1)
+
+
+
+zomba_table<-merge(zomba_table, za_dose2)
+
+
+
+zomba_table<-merge(zomba_table, za_male)
+
+
+
+zomba_table<-merge(zomba_table, za_female)
+
+
+
+zomba_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+zomba_data%>%
+
+  filter(total_vacc>=150)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Phalombe {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Phalombe Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+phalombe_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="phalombe")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+phalombe_coverage<-health_facility_table%>%
+
+  filter(district=="phalombe")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(phalombe_coverage, phalombe_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+phalombe_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="phalombe")
+
+
+
+ph_total<-phalombe_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ph_dose1<-phalombe_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ph_dose2<-phalombe_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ph_male<-phalombe_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ph_female<-phalombe_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+phalombe_table<-merge(ph_total, ph_dose1)
+
+
+
+phalombe_table<-merge(phalombe_table, ph_dose2)
+
+
+
+phalombe_table<-merge(phalombe_table, ph_male)
+
+
+
+phalombe_table<-merge(phalombe_table, ph_female)
+
+
+
+phalombe_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+phalombe_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Salima {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Salima Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+salima_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="salima")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+salima_coverage<-health_facility_table%>%
+
+  filter(district=="salima")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(salima_coverage, salima_consuption, ncol=2, nrow=1)
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+salima_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="salima")
+
+
+
+sa_total<-salima_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+sa_dose1<-salima_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+sa_dose2<-salima_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+sa_male<-salima_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+sa_female<-salima_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+salima_table<-merge(sa_total, sa_dose1)
+
+
+
+salima_table<-merge(salima_table, sa_dose2)
+
+
+
+salima_table<-merge(salima_table, sa_male)
+
+
+
+salima_table<-merge(salima_table, sa_female)
+
+
+
+salima_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+salima_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Ntchisi {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Ntchisi Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+ntchisi_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="ntchisi")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+ntchisi_coverage<-health_facility_table%>%
+
+  filter(district=="ntchisi")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(ntchisi_coverage, ntchisi_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+ntchisi_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="ntchisi")
+
+
+
+nt_total<-ntchisi_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+nt_dose1<-ntchisi_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+nt_dose2<-ntchisi_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+nt_male<-ntchisi_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+nt_female<-ntchisi_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+ntchisi_table<-merge(nt_total, nt_dose1)
+
+
+
+ntchisi_table<-merge(ntchisi_table, nt_dose2)
+
+
+
+ntchisi_table<-merge(ntchisi_table, nt_male)
+
+
+
+ntchisi_table<-merge(ntchisi_table, nt_female)
+
+
+
+ntchisi_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+ntchisi_data%>%
+
+  filter(total_vacc>=0)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Ntcheu {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Ntcheu Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+ntcheu_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="ntcheu")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+ntcheu_coverage<-health_facility_table%>%
+
+  filter(district=="ntcheu")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(ntcheu_coverage, ntcheu_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+ntcheu_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="ntcheu")
+
+
+
+nu_total<-ntcheu_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+nu_dose1<-ntcheu_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+nu_dose2<-ntcheu_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+nu_male<-ntcheu_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+nu_female<-ntcheu_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+ntcheu_table<-merge(nu_total, nu_dose1)
+
+
+
+ntcheu_table<-merge(ntcheu_table, nu_dose2)
+
+
+
+ntcheu_table<-merge(ntcheu_table, nu_male)
+
+
+
+ntcheu_table<-merge(ntcheu_table, nu_female)
+
+
+
+ntcheu_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+ntcheu_data%>%
+
+  filter(total_vacc>=70)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Mulanje {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Mulanje Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+mulanje_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mulanje")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+mulanje_coverage<-health_facility_table%>%
+
+  filter(district=="mulanje")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(mulanje_coverage, mulanje_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+mulanje_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mulanje")
+
+
+
+mj_total<-mulanje_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mj_dose1<-mulanje_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mj_dose2<-mulanje_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mj_male<-mulanje_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mj_female<-mulanje_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+mulanje_table<-merge(mj_total, mj_dose1)
+
+
+
+mulanje_table<-merge(mulanje_table, mj_dose2)
+
+
+
+mulanje_table<-merge(mulanje_table, mj_male)
+
+
+
+mulanje_table<-merge(mulanje_table, mj_female)
+
+
+
+mulanje_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+mulanje_data%>%
+
+  filter(total_vacc>=50)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Mchinji {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Mchinji Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+mchinji_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mchinji")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+mchinji_coverage<-health_facility_table%>%
+
+  filter(district=="mchinji")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(mchinji_coverage, mchinji_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+mchinji_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="mchinji")
+
+
+
+mc_total<-mchinji_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+mc_dose1<-mchinji_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+mc_dose2<-mchinji_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+mc_male<-mchinji_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+mc_female<-mchinji_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+mchinji_table<-merge(mc_total, mc_dose1)
+
+
+
+mchinji_table<-merge(mchinji_table, mc_dose2)
+
+
+
+mchinji_table<-merge(mchinji_table, mc_male)
+
+
+
+mchinji_table<-merge(mchinji_table, mc_female)
+
+
+
+mchinji_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+mchinji_data%>%
+
+  filter(total_vacc>=20)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 8, colour = "black"))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Dedza {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Dedza Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+dedza_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="dedza")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+dedza_coverage<-health_facility_table%>%
+
+  filter(district=="dedza")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(dedza_coverage, dedza_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+dedza_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="dedza")
+
+
+
+dz_total<-dedza_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+dz_dose1<-dedza_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+dz_dose2<-dedza_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+dz_male<-dedza_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+dz_female<-dedza_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+dedza_table<-merge(dz_total, dz_dose1)
+
+
+
+dedza_table<-merge(dedza_table, dz_dose2)
+
+
+
+dedza_table<-merge(dedza_table, dz_male)
+
+
+
+dedza_table<-merge(dedza_table, dz_female)
+
+
+
+dedza_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Top Five health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+dedza_data%>%
+
+  filter(total_vacc>=0)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 7))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 10)
+
+
+
+
+
+```
+
+
+
+
+# Balaka {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Balaka Health facilities
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+balaka_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="balaka")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+balaka_coverage<-health_facility_table%>%
+
+  filter(district=="balaka")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(balaka_coverage, balaka_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+balaka_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="balaka")
+
+
+
+ba_total<-balaka_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ba_dose1<-balaka_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ba_dose2<-balaka_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ba_male<-balaka_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ba_female<-balaka_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+balaka_table<-merge(ba_total, ba_dose1)
+
+
+
+balaka_table<-merge(balaka_table, ba_dose2)
+
+
+
+balaka_table<-merge(balaka_table, ba_male)
+
+
+
+balaka_table<-merge(balaka_table, ba_female)
+
+
+
+balaka_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated", 
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Selected health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+balaka_data%>%
+
+  filter(total_vacc>=150)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 7))+
+
+     facet_wrap(~health_facility, ncol = 4, nrow = 8)
+
+
+
+
+
+```
+
+
+
+
+# Karonga {data-navmenu="Health Facility"}
+
+
+
+## column1 {data-width="500"}
+
+
+
+### Karonag Health facility
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+karonga_consuption<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="karonga")%>%
+
+  plotly::select(health_facility, total_vacc)%>%
+
+  group_by(health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  ggplot(aes( reorder(x=health_facility,total_vacc), y=total_vacc))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=total_vacc,label=total_vacc),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y="Doses Consuption")
+
+
+
+
+
+karonga_coverage<-health_facility_table%>%
+
+  filter(district=="karonga")%>%
+
+  filter(coverage<=120)%>%
+
+  ggplot(aes( reorder(x=health_facility,coverage), y=coverage))+
+
+  geom_col(fill="skyblue")+
+
+  coord_flip()+
+
+   theme_minimal()+
+
+  theme(axis.text.y= element_text(size=10, colour = "black", vjust = 0.5, hjust = 0.5))+
+
+   theme(axis.text.x = element_text(angle = 0, size = 10, color = "black", vjust = 0.5, hjust = 0.5))+
+
+  theme(axis.title.x = element_text(size = 12, colour = "black", face = "bold"))+
+
+   theme(axis.title.y = element_text(size = 12, colour = "black", face = "bold"))+
+
+  geom_text(aes(x=health_facility, y=coverage,label=coverage),
+
+            vjust=0.5, hjust=+1.0, color="black", size=5)+
+
+      labs(x="health Facility", 
+
+       y=" Vaccination Coverage")
+
+
+
+
+
+ggarrange(karonga_coverage, karonga_consuption, ncol=2, nrow=1)
+
+
+
+```
+
+
+
+
+## Column 2 {data-width="500"}
+
+
+
+### Total Vaccinated {data-height="150"}
+
+
+
+
+```{r}
+
+Karonga_data<-Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18")%>%
+
+  filter(district=="karonga")
+
+
+
+ka_total<-Karonga_data%>%
+
+  summarise(total_vacc=sum(total_vacc))
+
+
+
+ka_dose1<-Karonga_data%>%
+
+  summarise(total_dose1=sum(total_dose1))
+
+
+
+ka_dose2<-Karonga_data%>%
+
+  summarise(total_dose2=sum(total_dose2))
+
+
+
+ka_male<-Karonga_data%>%
+
+  mutate(male=round(total_dose1_male+total_dose2_male))%>%
+
+  summarise(male=sum(male))
+
+
+
+ka_female<-Karonga_data%>%
+
+  mutate(female=round(total_dose1_female+total_dose2_female))%>%
+
+  summarise(female=sum(female))
+
+
+
+Karonga_table<-merge(ka_total, ka_dose1)
+
+
+
+Karonga_table<-merge(Karonga_table, ka_dose2)
+
+
+
+Karonga_table<-merge(Karonga_table, ka_male)
+
+
+
+Karonga_table<-merge(Karonga_table, ka_female)
+
+
+
+
+
+
+
+Karonga_table%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    total_vacc="Total Vaccinated",
+
+    total_dose1="First Dose", 
+
+    total_dose2="Booster", 
+
+    male="Male",
+
+    female="Female"
+
+    )%>%
+
+  bg(part = "header", bg = "skyblue")
+
+
+
+```
+
+
+
+
+### Top Five health Facility trends {data-height="600"}
+
+
+
+
+```{r, fig.height=7}
+
+Karonga_data%>%
+
+  filter(total_vacc>=20)%>%
+
+  ggplot(aes(x=date, y=total_vacc))+
+
+  geom_col(fill="tomato")+
+
+  theme_minimal()+
+
+  scale_x_date(date_breaks = "1 day", date_labels = "%d-%m-%Y")+
+
+  theme(axis.text = element_text(angle = 90))+
+
+  theme(axis.text.y = element_text(size = 7, angle = 0))+
+
+  labs(y="Total Vaccinated", 
+
+       caption = "Data: EPI District Daily Vacination report")+
+
+  ggtitle(label = "Covid-19 Vaccination campagin")+
+
+  theme(plot.title = element_text(size = 10),
+
+      strip.text = element_text(size = 7))+
+
+     facet_wrap(~health_facility, ncol = 3, nrow = 4)
+
+
+
+
+
+```
+
+
+
+
+# District Summary {data-navmenu="Summary tables"}
+
+
+
+## Row 1 {data-height="700"}
+
+
+
+### District Summary
+
+
+
+
+```{r, fig.height=7, fig.width=7}
+
+
+
+# defining border lines
+
+# border_style = officer::fp_border(color="black", width=1)
+
+# 
+
+# 
+
+# Coveraga_table<-Nation_tabel2%>%
+
+#   filter(district!="Total")%>%
+
+#   arrange(desc(coverage))%>%
+
+#    flextable()%>%
+
+#   fontsize(size = 7, part = "body")%>%
+
+#   set_header_labels(
+
+#     district="District",
+
+#     target="Target",
+
+#     HW_total="Health Worker", 
+
+#     sw_total="Social Worker", 
+
+#     comb_total="Comrbidity", 
+
+#     years_18_59="Age_Group 18-59", 
+
+#     above_60="Above 60ys ", 
+
+#     ref_total="Refugees", 
+
+#     pri_total="Prisions", 
+
+#     total_vacc="Total Vaccinated", 
+
+#     coverage= "Coverage")%>%
+
+#     flextable::align(align = "center", j = c(2:11), part = "all")%>%
+
+#     border_remove()%>%
+
+#     theme_booktabs()%>%
+
+#     vline(part = "all", j = 1, border = border_style) %>%
+
+#     vline(part = "all", j = 2, border = border_style) %>%
+
+#     vline(part = "all", j = 10, border = border_style)%>%
+
+#     vline(part = "all", j = 11, border = border_style)%>%
+
+#     fontsize(i = 1, size = 12, part = "header")%>%
+
+#     bold(i = 1, bold = TRUE, part = "header") %>%
+
+#     bold(i = 29, bold = TRUE, part = "body")%>%
+
+#       bg(part = "header", bg = "skyblue")%>%
+
+#       bg(part = "body", bg = "gray95")%>%
+
+#       bg(j =11, i =~coverage>=0,part = "body", bg = "red")%>%
+
+#       bg(j =11, i =~coverage>=50,part = "body", bg = "yellow")%>%
+
+#       bg(j =11, i = ~coverage>=70, part = "body", bg = "green")%>%
+
+#       width(j=c(1:11), width = 0.5)%>%
+
+#       height(i=c(2:29), height = 8, unit = "in", part = "body")
+
+
+
+
+
+#save_as_image(Coveraga_table, path = "covid_vac_table20240305.png")
+
+
+
+
+
+setDT(Nation_tabel2) # convert to data.table format
+
+
+# Converting the first Letter of the District
+Nation_tabel2$district<-str_to_title(Nation_tabel2$district)
+
+
+
+Nation_tabel2[,coverage:= cell_spec(coverage,
+
+        background =fcase(coverage <= 40, "red",
+
+                          coverage <= 69, "yellow",
+
+                          coverage >= 70, "green"
+
+                          ))]
+
+Nation_tabel2<-Nation_tabel2%>%
+    dplyr::rename("District"=district)|>
+    dplyr::rename("Target"=doses_available)|>
+    dplyr::rename("Health Workers"=HW_total)|>
+    dplyr::rename("Social Workers"=sw_total)|>
+    dplyr::rename("Comorbidity"=comb_total)|>
+    dplyr::rename("Between 18-59ys"=years_18_59)|>
+    dplyr::rename("Above 60ys"=above_60)|>
+    dplyr::rename("Refugees"=ref_total)|>
+    dplyr::rename("Prisoners"=pri_total)|>
+    dplyr::rename("Total Vaccinated"=total_vacc)|>
+    dplyr::rename("Coverage(%)"=coverage)
+
+
+Nation_tabel2 |> kable(format = "html",
+                       escape = FALSE,
+                       booktabs= T,
+                       linesep= "")%>%
+     kable_styling(bootstrap_options="condensed",
+                 full_width=FALSE, position="center",     
+                  latex_options="scale_down",
+                 font_size=20, font(color="black"))%>%
+  column_spec(1, border_right=T)%>%
+  column_spec(10, border_right=T)%>%
+  row_spec(11, bold=T, hline_after=T)%>%
+  row_spec(1:11, color="black")%>%
+  column_spec(1, width="10em")
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+# Health Facility summary table {data-navmenu="Summary tables"}
+
+
+
+## column 1 {data-width="700"}
+
+
+
+### Health Facility summary table
+
+
+
+
+```{r, fig.height=7, fig.width=7}
+
+# 
+
+# # defining border lines
+
+# border_style = officer::fp_border(color="black", width=1)
+
+# 
+
+# health_facility_table%>%
+
+#   filter(coverage!=Inf)%>%
+
+#  arrange(desc(total_vacc))%>%
+
+#   #filter(coverage>=130, coverage<150)%>%
+
+#   filter(health_facility!="Total")%>%
+
+#   flextable()%>%
+
+#   fontsize(size = 7, part = "body")%>%
+
+#   set_header_labels(
+
+#    target="Target",
+
+#     HW_total="Health Worker", 
+
+#     sw_total="Social Worker", 
+
+#     comb_total="Comrbidity", 
+
+#     years_18_59="Age_Group 18-59", 
+
+#     above_60="Above 60ys ", 
+
+#     ref_total="Refugees", 
+
+#     pri_total="Prisions", 
+
+#     total_vacc="Total Vaccinated", 
+
+#     coverage= "Coverage")%>%
+
+#     flextable::align(align = "center", j = c(2:11), part = "all")%>%
+
+#     border_remove()%>%
+
+#     theme_booktabs()%>%
+
+#     vline(part = "all", j = 1, border = border_style) %>%
+
+#     vline(part = "all", j = 2, border = border_style) %>%
+
+#     vline(part = "all", j = 10, border = border_style)%>%
+
+#     vline(part = "all", j = 11, border = border_style)%>%
+
+#     fontsize(i = 1, size = 12, part = "header")%>%
+
+#     bold(i = 1, bold = TRUE, part = "header") %>%
+
+#     bold(i = 754, bold = TRUE, part = "body")%>%
+
+#       bg(part = "header", bg = "skyblue")%>%
+
+#       bg(part = "body", bg = "gray95")%>%
+
+#       bg(j =12, i =~coverage>=0,part = "body", bg = "red")%>%
+
+#       bg(j =12, i =~coverage>=50,part = "body", bg = "yellow")%>%
+
+#       bg(j =12, i = ~coverage>=70, part = "body", bg = "green")%>%
+
+#      width(j=c(1:12), width = 0.35)%>%
+
+#      height(i=c(2:754), height = 2, unit = "cm", part = "body")
+
+    
+
+
+
+#save_as_image(Health_figure, path = "Health_f_2024.png")
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+# None Reporting Health facility {data-navmenu="Summary tables"}
+
+
+
+The National data team is following up with district data team on the none reporting health facility. thank
+
+
+
+## column 1 {data-height="400"}
+
+
+
+### Day 1
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date=="2024-02-18")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF"
+
+  )
+
+```
+
+
+
+
+## column 2 {data-height="400"}
+
+
+
+### Day 2
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date=="2024-02-19")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF"
+
+  )
+
+```
+
+
+
+
+## column 3 {data-height="400"}
+
+
+
+### Day 3
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date=="2024-02-20")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF "
+
+  )
+
+
+
+```
+
+
+
+
+## column 4 {data-height="400"}
+
+
+
+### Day 4
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date=="2024-02-21")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF "
+
+  )
+
+
+
+```
+
+
+
+
+## column 5 {data-height="400"}
+
+
+
+### Day 5
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date=="2024-02-22")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF "
+
+  )
+
+
+
+```
+
+
+
+
+## column 6 {data-height="400"}
+
+
+
+### Day 6
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date=="2024-02-23")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF "
+
+  )
+
+
+
+```
+
+
+
+
+## column 7 {data-height="400"}
+
+
+
+### Day 1 to 11
+
+
+
+
+```{r}
+
+Covid_19_Vaccination%>%
+
+  filter(date>="2024-02-18", date<="2024-03-01")%>%
+
+  group_by(district, health_facility)%>%
+
+  summarise(total_vacc=sum(total_vacc))%>%
+
+  filter(total_vacc==0)%>%
+
+  count(health_facility)%>%
+
+  plotly::select(-district)%>%
+
+    summarise(n=sum(n))%>%
+
+  adorn_totals(where = "row")%>%
+
+  flextable()%>%
+
+  autofit()%>%
+
+  set_header_labels(
+
+    district="District", 
+
+    n="# HF "
+
+  )
+
+
+
+```
+
+
+
+
+# Pictorial
+
+
+
+## Column 1
+
+
+
+### Rumphi EOC Meeting
+
+
+
+![](images/RumphiEOC.jpeg){width="680"}
+
+
+
+### Salima EOC Meeting
+
+
+
+![](images/Salima%20EOC.jpeg){width="888"}
+
+
+
+## Column 2 {data-width="350",.tabset }
+
+
+
+### Vaccination Excise: Katawa Health Center Salima
+
+
+
+### ![HSA conducting Vaccination Excise in Katawa Health Center Salima DHO](images/Health%20Worker_cov.jpeg){width="550"}
+
+
+
+## Column 2 {data-width="350",.tabset}
+
+
+
+### ![Documentation: Better quality data for decision making](images/HSA%20Caputing%20COVID%20Vac%20Data.jpeg){width="200"}
+
+
+
+\###![](images/Zomba_covid19_data_for_action.jfif "Data for action"){width="700"}
+
+
+
+# 25 March-2024 to 6 April-2024
+
+
